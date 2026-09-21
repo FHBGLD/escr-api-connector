@@ -43,7 +43,7 @@ variables:
 secret_detection:
   stage: secret-detection
 
-php8.5-unit-test:   # This job runs in the test stage.
+php8.5:   # This job runs in the test stage.
   image: $PHP_IMAGE
   stage: unit-test    # It only starts when the job in the build stage completes successfully.
   before_script:
