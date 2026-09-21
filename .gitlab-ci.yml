@@ -8,17 +8,51 @@
 stages:
 - test
 - secret-detection
-sast:
-  stage: test
-include:
-- template: Security/SAST.gitlab-ci.yml
-- template: Security/Secret-Detection.gitlab-ci.yml
-variables:
-  SECRET_DETECTION_ENABLED: 'true'
-secret_detection:
-  stage: secret-detection
+- unit-test
 
 default:
   tags:
     - dev
     - rnd02
+
+include:
+- template: Security/SAST.gitlab-ci.yml
+- template: Security/Secret-Detection.gitlab-ci.yml
+
+sast:
+  stage: test
+
+variables:
+  SECRET_DETECTION_ENABLED: 'true'
+  PHP_IMAGE: php:8.5-fpm-alpine3.23
+  UNIT_TEST: true  
+
+.install_cert: &install_cert
+  - apk add --no-cache ca-certificates
+  - update-ca-certificates  
+  - cp cicd/php/99-ssl.ini /usr/local/etc/php/conf.d/99-ssl.ini
+
+.install_composer: &install_composer
+  - ./cicd/install_composer.sh
+  - mv composer.phar /usr/local/bin/composer
+
+.php_setup: &php_setup
+  - *install_cert
+  - *install_composer
+
+secret_detection:
+  stage: secret-detection
+
+php8.5-unit-test:   # This job runs in the test stage.
+  image: $PHP_IMAGE
+  stage: unit-test    # It only starts when the job in the build stage completes successfully.
+  before_script:
+    - *php_setup
+    - composer install
+  script:
+    - vendor/bin/phpunit -c cicd/phpunit.xml
+  rules:
+    - if: $UNIT_TEST == 'true'
+      when: always
+    - if: $UNIT_TEST == 'false'
+      when: never
