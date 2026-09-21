@@ -8,6 +8,9 @@
 stages:
 - test
 - secret-detection
+tags:
+  - dev
+  - rnd02
 sast:
   stage: test
 include:
