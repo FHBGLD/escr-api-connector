@@ -33,7 +33,7 @@ variables:
   - cp cicd/php/99-ssl.ini /usr/local/etc/php/conf.d/99-ssl.ini
 
 .install_composer: &install_composer
-  - ./cicd/install_composer.sh
+  - ./cicd/php/install_composer.sh
   - mv composer.phar /usr/local/bin/composer
 
 .php_setup: &php_setup
