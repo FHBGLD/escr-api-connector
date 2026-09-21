@@ -1,0 +1,31 @@
+{
+    "name": "hawb/escr-api-connector",
+    "description": "Package that talks to the API of the European Student Card Router to Insert, Update and Delete Card Holders and corresponding European Student Cards. Also retrieve the QR Code for validating a digital ESC.",
+    "type": "library",
+    "require": {
+        "guzzlehttp/guzzle": "~8.2.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^13.3.2"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Hawb\\EscrApiConnector\\": "src/",
+            "Hawb\\EscrApiConnector\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Martin Fiebrich-Christ",
+            "email": "martin.fiebrich-christ@hochschule-burgenland.at"
+        }
+    ],
+    "minimum-stability": "stable",
+    "scripts": {
+        "test": "vendor/bin/phpunit --colors=always"
+    },
+    "scripts-descriptions": {
+        "test": "Runs all tests."
+    }
+}

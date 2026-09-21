@@ -1,6 +1,8 @@
 # ESCR API Connector
 
+## Description
 
+![Tests](https://gitlab.fhbgld.at/hawb/composer-packages/escr-api-connector/badges/main/pipeline.svg)
 
 ## Getting started
 
