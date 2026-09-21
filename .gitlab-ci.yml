@@ -8,9 +8,6 @@
 stages:
 - test
 - secret-detection
-tags:
-  - dev
-  - rnd02
 sast:
   stage: test
 include:
@@ -20,3 +17,8 @@ variables:
   SECRET_DETECTION_ENABLED: 'true'
 secret_detection:
   stage: secret-detection
+
+default:
+  tags:
+    - dev
+    - rnd02
