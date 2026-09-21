@@ -2,7 +2,7 @@
 
 ## Description
 
-![Tests](https://gitlab.fhgld.at/hawb/composer-packages/escr-api-connector/badges/main/pipeline.svg)
+![Tests](https://gitlab.fhbgld.at/hawb/composer-packages/escr-api-connector/badges/main/pipeline.svg)
 
 ## Getting started
 
