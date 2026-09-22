@@ -36,9 +36,18 @@ variables:
   - ./cicd/php/install_composer.sh
   - mv composer.phar /usr/local/bin/composer
 
+.install_xdebug: &install_xdebug
+  - apk update
+  - apk add --no-cache --virtual .build-deps $PHPIZE_DEPS linux-headers
+  - pecl install xdebug-3.5.3
+  - docker-php-ext-enable xdebug
+  - cp cicd/php/docker-php-ext-xdebug.ini /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+
 .php_setup: &php_setup
   - *install_cert
   - *install_composer
+  - *install_xdebug
+  - php -i
 
 secret_detection:
   stage: secret-detection
@@ -50,7 +59,8 @@ php8.5:   # This job runs in the test stage.
     - *php_setup
     - composer install
   script:
-    - php -d memory_limit=-1 vendor/bin/phpunit -c cicd/phpunit.xml
+    - php -d memory_limit=-1 vendor/bin/phpunit -c cicd/phpunit.xml --coverage-text
+  coverage: '/^\s*Lines:\s*\d+.\d+\%/'
   rules:
     - if: $UNIT_TEST == 'true'
       when: always
@@ -64,7 +74,8 @@ php8.4:
     - *php_setup
     - composer install
   script:
-    - php -d memory_limit=-1 vendor/bin/phpunit -c cicd/phpunit.xml
+    - php -d memory_limit=-1 vendor/bin/phpunit -c cicd/phpunit.xml --coverage-text
+  coverage: '/^\s*Lines:\s*\d+.\d+\%/'
   rules:
     - if: $UNIT_TEST == 'true'
       when: always
