@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Hawb\MemberCard\Classes;
+namespace Hawb\EscrApiConnector\Classes;
 
 use DOMDocument;
 use DOMElement;
@@ -14,6 +14,7 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Promise\PromiseInterface;
 use Hawb\EscrApiConnector\Contracts\EscApiLoggerInterface;
+use Hawb\EscrApiConnector\Exceptions\EscApiException;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Throwable;
@@ -25,25 +26,17 @@ use Throwable;
  */
 final readonly class EscApiClient
 {
-    private const QR_CODE_RENDER_SIZE = 240.0;
-
-    private Client $http;
+    private Client $httpClient;
     private EscConfig $config;
 
     public function __construct(
-        ?Client $http = null,
-        ?EscConfig $config = null,
-        ?EscApiLoggerInterface $logger = null,
+        EscConfig $config,
+        Client $httpClient
     )
     {
-        $this->config = $config ?? new EscConfig(
-            apiToken: $_ENV['ESC_API_TOKEN'],
-            baseUrl: $_ENV['ESC_API_BASE_URL'],
-            organisationPic: $_ENV['ESC_ORGANISATION_PIC'],
-            countryCode: $_ENV['ESC_COUNTRY_CODE'],
-        );
+        $this->config = $config;
 
-        $http ??= new Client([
+        $this->httpClient = $httpClient ?? new Client([
             'base_uri' => rtrim($this->config->baseUrl, '/') . '/',
             'headers' => [
                 'Authorization' => 'Bearer ' . $this->config->apiToken,
@@ -52,79 +45,8 @@ final readonly class EscApiClient
             ],
             'timeout' => 30,
         ]);
-
-        $this->http = $logger === null ? $http : $this->withLogging($http, $logger);
     }
 
-    private function withLogging(Client $http, EscApiLoggerInterface $logger): Client
-    {
-        $clientConfig = $http->getConfig();
-        $handler = $clientConfig['handler'] ?? null;
-        $stack = $handler instanceof HandlerStack
-            ? clone $handler
-            : HandlerStack::create(is_callable($handler) ? $handler : null);
-
-        $stack->push($this->loggingMiddleware($logger), 'escr_daily_logger');
-        $clientConfig['handler'] = $stack;
-
-        return new Client($clientConfig);
-    }
-
-    private function loggingMiddleware(EscApiLoggerInterface $logger): callable
-    {
-        return static function (callable $handler) use ($logger): callable {
-            return static function (RequestInterface $request, array $options) use ($handler, $logger): PromiseInterface {
-                $startedAt = hrtime(true);
-
-                try {
-                    $promise = $handler($request, $options);
-                } catch (Throwable $error) {
-                    self::logExchange($logger, $request, null, $error, $startedAt);
-                    throw $error;
-                }
-
-                return $promise->then(
-                    static function (ResponseInterface $response) use ($logger, $request, $startedAt): ResponseInterface {
-                        self::logExchange($logger, $request, $response, null, $startedAt);
-
-                        return $response;
-                    },
-                    static function (mixed $reason) use ($logger, $request, $startedAt): PromiseInterface {
-                        $error = Create::exceptionFor($reason);
-                        $response = $error instanceof ResponseException
-                            ? $error->getResponse()
-                            : null;
-                        self::logExchange($logger, $request, $response, $error, $startedAt);
-
-                        return Create::rejectionFor($reason);
-                    },
-                );
-            };
-        };
-    }
-
-    private static function logExchange(
-        EscApiLoggerInterface $logger,
-        RequestInterface $request,
-        ?ResponseInterface $response,
-        ?Throwable $error,
-        int $startedAt,
-    ): void {
-        try {
-            $logger->log(
-                $request,
-                $response,
-                $error,
-                (hrtime(true) - $startedAt) / 1_000_000,
-            );
-        } catch (Throwable $loggingFailure) {
-            error_log('Unable to log ESCR exchange: ' . $loggingFailure->getMessage());
-        }
-    }
-
-    /**
-     * Build the full URL that listPersons would request, including all query parameters.
-     */
     public function buildListPersonsUrl(int $page = 0, int $size = 20, string $search = '', string $searchField = 'fullName'): string
     {
         $query = ['page' => $page, 'size' => $size, 'direction' => 'ASC'];
@@ -138,11 +60,6 @@ final readonly class EscApiClient
         return $base . '?' . http_build_query($query);
     }
 
-    /**
-     * Fetch a paginated list of persons from the ESC API.
-     *
-     * @return array{content: list<array<string, mixed>>, page: array{number: int, size: int, totalElements: int, totalPages: int}}
-     */
     public function listPersons(int $page = 0, int $size = 20, string $search = '', string $searchField = 'fullName'): array
     {
         try {
@@ -152,7 +69,7 @@ final readonly class EscApiClient
                 $query['search'] = "{$searchField}~{$search}";
             }
 
-            $response = $this->http->get('api/v2/persons', ['query' => $query]);
+            $response = $this->httpClient->get('api/v2/persons', ['query' => $query]);
 
             /** @var array{content: list<array<string, mixed>>, page: array{number: int, size: int, totalElements: int, totalPages: int}} $decoded */
             return json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
@@ -164,9 +81,6 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Build the full URL that getPerson would request.
-     */
     public function buildPersonUrl(string $esi): string
     {
         return rtrim($this->config->baseUrl, '/') . '/api/v2/persons/' . rawurlencode($esi);
@@ -180,7 +94,7 @@ final readonly class EscApiClient
     public function getPerson(string $esi): array
     {
         try {
-            $response = $this->http->get('api/v2/persons/' . rawurlencode($esi));
+            $response = $this->httpClient->get('api/v2/persons/' . rawurlencode($esi));
 
             /** @var array<string, mixed> $decoded */
             return json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
@@ -209,7 +123,7 @@ final readonly class EscApiClient
     public function personExists(string $esi): bool
     {
         try {
-            $this->http->get('api/v2/persons/' . rawurlencode($esi));
+            $this->httpClient->get('api/v2/persons/' . rawurlencode($esi));
 
             return true;
         } catch (ClientException $e) {
@@ -235,7 +149,7 @@ final readonly class EscApiClient
     public function createPerson(Student $student, string $esi): void
     {
         try {
-            $this->http->post('api/v2/persons', [
+            $this->httpClient->post('api/v2/persons', [
                 'json' => $this->buildPersonPayload($student, $esi),
             ]);
         } catch (ClientException $e) {
@@ -264,7 +178,7 @@ final readonly class EscApiClient
     public function updatePerson(Student $student, string $esi): void
     {
         try {
-            $this->http->put("api/v2/persons/{$esi}", [
+            $this->httpClient->put("api/v2/persons/{$esi}", [
                 'json' => $this->buildPersonPayload($student, $esi),
             ]);
         } catch (ClientException $e) {
@@ -345,7 +259,7 @@ final readonly class EscApiClient
                 $query['search'] = "{$searchField}~{$search}";
             }
 
-            $response = $this->http->get('api/v2/cards', ['query' => $query]);
+            $response = $this->httpClient->get('api/v2/cards', ['query' => $query]);
 
             /** @var array{content: list<array<string, mixed>>, page: array{number: int, size: int, totalElements: int, totalPages: int}} $decoded */
             return json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
@@ -357,15 +271,10 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Fetch a single card by ESCN from the ESC API.
-     *
-     * @return array<string, mixed>
-     */
     public function getCard(string $escn): array
     {
         try {
-            $response = $this->http->get("api/v2/cards/{$escn}");
+            $response = $this->httpClient->get("api/v2/cards/{$escn}");
 
             /** @var array<string, mixed> $decoded */
             return json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
@@ -388,9 +297,6 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Fetch the first ESC QR code assigned to a person.
-     */
     public function getQrCodeSvgByEsi(string $esi): ?string
     {
         if ($esi === '' || !$this->personExists($esi)) {
@@ -413,7 +319,7 @@ final readonly class EscApiClient
     public function getCardQrCode(string $escn): string
     {
         try {
-            $response = $this->http->get('api/v2/cards/' . rawurlencode($escn) . '/qr', [
+            $response = $this->httpClient->get('api/v2/cards/' . rawurlencode($escn) . '/qr', [
                 'headers' => [
                     'Accept' => 'image/svg+xml',
                 ],
@@ -450,7 +356,7 @@ final readonly class EscApiClient
         $issuedAt = date('Y-m-d');
 
         try {
-            $this->http->post('api/v2/cards', [
+            $this->httpClient->post('api/v2/cards', [
                 'json' => [
                     'personIdentifier' => $esi,
                     'issuerIdentifier' => $this->config->organisationPic,
@@ -520,7 +426,7 @@ final readonly class EscApiClient
     public function deleteCard(string $escn): void
     {
         try {
-            $this->http->delete('api/v2/cards/' . rawurlencode($escn));
+            $this->httpClient->delete('api/v2/cards/' . rawurlencode($escn));
         } catch (ClientException $e) {
             $status = $e->getResponse()->getStatusCode();
 
@@ -546,7 +452,7 @@ final readonly class EscApiClient
     public function deletePerson(string $esi): void
     {
         try {
-            $this->http->delete('api/v2/persons/' . rawurlencode($esi));
+            $this->httpClient->delete('api/v2/persons/' . rawurlencode($esi));
         } catch (ClientException $e) {
             $status = $e->getResponse()->getStatusCode();
 
@@ -587,85 +493,4 @@ final readonly class EscApiClient
         ];
     }
 
-    private function resizeQrCodeSvg(string $svg): string
-    {
-        $document = new DOMDocument();
-        $previousErrorHandling = libxml_use_internal_errors(true);
-
-        try {
-            if (!$document->loadXML($svg, LIBXML_NONET | LIBXML_NOBLANKS)) {
-                return $svg;
-            }
-
-            $root = $document->documentElement;
-            if (!$root instanceof DOMElement || $root->localName !== 'svg') {
-                return $svg;
-            }
-
-            $parts = [];
-            foreach ($root->childNodes as $child) {
-                if ($child instanceof DOMElement && $child->localName === 'svg') {
-                    $parts[] = $child;
-                }
-            }
-
-            if (count($parts) < 2) {
-                return $svg;
-            }
-
-            [$qrCode, $logo] = $parts;
-            $logoAspectRatio = $this->svgAspectRatio($logo);
-            if ($logoAspectRatio === null) {
-                return $svg;
-            }
-
-            $qrCodeSize = self::QR_CODE_RENDER_SIZE;
-            $logoWidth = $qrCodeSize * $logoAspectRatio;
-            $totalWidth = $qrCodeSize + $logoWidth;
-            $formattedQrCodeSize = $this->svgNumber($qrCodeSize);
-            $formattedLogoWidth = $this->svgNumber($logoWidth);
-            $formattedTotalWidth = $this->svgNumber($totalWidth);
-
-            $root->setAttribute('width', $formattedTotalWidth);
-            $root->setAttribute('height', $formattedQrCodeSize);
-            $root->setAttribute('viewBox', "0 0 {$formattedTotalWidth} {$formattedQrCodeSize}");
-            $root->setAttribute('preserveAspectRatio', 'xMinYMin meet');
-
-            $qrCode->setAttribute('x', '0');
-            $qrCode->setAttribute('y', '0');
-            $qrCode->setAttribute('width', $formattedQrCodeSize);
-            $qrCode->setAttribute('height', $formattedQrCodeSize);
-
-            $logo->setAttribute('x', $formattedQrCodeSize);
-            $logo->setAttribute('y', '0');
-            $logo->setAttribute('width', $formattedLogoWidth);
-            $logo->setAttribute('height', $formattedQrCodeSize);
-
-            $resizedSvg = $document->saveXML($root);
-
-            return is_string($resizedSvg) ? $resizedSvg : $svg;
-        } finally {
-            libxml_clear_errors();
-            libxml_use_internal_errors($previousErrorHandling);
-        }
-    }
-
-    private function svgAspectRatio(DOMElement $element): ?float
-    {
-        $viewBox = preg_split('/\s+/', trim($element->getAttribute('viewBox')));
-        if (is_array($viewBox) && count($viewBox) === 4) {
-            $width = (float) $viewBox[2];
-            $height = (float) $viewBox[3];
-        } else {
-            $width = (float) $element->getAttribute('width');
-            $height = (float) $element->getAttribute('height');
-        }
-
-        return $width > 0.0 && $height > 0.0 ? $width / $height : null;
-    }
-
-    private function svgNumber(float $number): string
-    {
-        return rtrim(rtrim(number_format($number, 4, '.', ''), '0'), '.');
-    }
 }
