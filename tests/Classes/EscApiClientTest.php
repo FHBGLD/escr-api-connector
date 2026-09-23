@@ -61,13 +61,13 @@ class EscApiClientTest extends TestCase {
         $response = $apiClient->listPersons();
         $this->assertIsArray($response);
         $this->assertContains('List persons', $response);
-    }
+    } 
 
     #[Group('cicd')]
     #[Group('local')]
-    public function testPersonExistencyCheckWorks(): void {
+    public function testPersonExistencyCheckWorksWithExistingPerson(): void {
         $esi = 'abc';
-        $apiClient = $this->createApiClient([true]);
+        $apiClient = $this->createApiClient(['one element']);
         $response = $apiClient->personExists($esi);
         $this->assertIsBool($response);
         $this->assertTrue($response);
@@ -75,7 +75,17 @@ class EscApiClientTest extends TestCase {
 
     #[Group('cicd')]
     #[Group('local')]
-    public function testPersonRequestSucceedsWithout(): void {
+    public function testPersonExistencyCheckWorksWithNonExistingPerson(): void {
+        $esi = 'abc';
+        $apiClient = $this->createApiClient([]);
+        $response = $apiClient->personExists($esi);
+        $this->assertIsBool($response);
+        $this->assertFalse($response);
+    }
+
+    #[Group('cicd')]
+    #[Group('local')]
+    public function testPersonRequestSucceeds(): void {
         $esi = 'abc';
         $apiClient = $this->createApiClient([$esi]);
         $response = $apiClient->getPerson($esi);

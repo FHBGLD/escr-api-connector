@@ -4,26 +4,11 @@ declare(strict_types=1);
 
 namespace Hawb\EscrApiConnector\Classes;
 
-use DOMDocument;
-use DOMElement;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
-use GuzzleHttp\Exception\ResponseException;
 use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\HandlerStack;
-use GuzzleHttp\Promise\Create;
-use GuzzleHttp\Promise\PromiseInterface;
-use Hawb\EscrApiConnector\Contracts\EscApiLoggerInterface;
 use Hawb\EscrApiConnector\Exceptions\EscApiException;
-use Psr\Http\Message\RequestInterface;
-use Psr\Http\Message\ResponseInterface;
-use Throwable;
 
-/**
- * Thin wrapper around the ESC Router REST API v2.
- *
- * @see https://router.europeanstudentcard.eu/esc-rest/v3/api-docs/V2
- */
 final readonly class EscApiClient
 {
     private Client $httpClient;
@@ -44,6 +29,7 @@ final readonly class EscApiClient
                 'Accept' => 'application/json',
             ],
             'timeout' => 30,
+            'http_errors' => false,
         ]);
     }
 
@@ -72,20 +58,8 @@ final readonly class EscApiClient
     {
         try {
             $response = $this->httpClient->get('api/v2/persons/' . rawurlencode($esi));
-
-            /** @var array<string, mixed> $decoded */
-            return json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
-        } catch (ClientException $e) {
-            $status = $e->getResponse()->getStatusCode();
-
-            if ($status === 404) {
-                throw new EscApiException("Person not found: {$esi}", previous: $e);
-            }
-
-            throw new EscApiException(
-                "Failed to fetch person {$esi} (HTTP {$status}): " . $e->getMessage(),
-                previous: $e,
-            );
+            $result = ['status_code' => $response->getStatusCode(), ...json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR)];
+            return $result;
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while fetching person {$esi}: " . $e->getMessage(),
@@ -96,25 +70,8 @@ final readonly class EscApiClient
 
     public function personExists(string $esi): bool
     {
-        try {
-            $this->httpClient->get('api/v2/persons/' . rawurlencode($esi));
-
-            return true;
-        } catch (ClientException $e) {
-            if ($e->getResponse()->getStatusCode() === 404) {
-                return false;
-            }
-
-            throw new EscApiException(
-                "Unexpected response while checking person {$esi}: " . $e->getMessage(),
-                previous: $e,
-            );
-        } catch (GuzzleException $e) {
-            throw new EscApiException(
-                "HTTP error while checking person {$esi}: " . $e->getMessage(),
-                previous: $e,
-            );
-        }
+        $response = $this->getPerson($esi);
+        return $response['status_code'] === 200;
     }
 
     /**
