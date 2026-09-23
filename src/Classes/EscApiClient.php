@@ -31,7 +31,7 @@ final readonly class EscApiClient
 
     public function __construct(
         EscConfig $config,
-        Client $httpClient
+        ?Client $httpClient = null
     )
     {
         $this->config = $config;
@@ -45,19 +45,6 @@ final readonly class EscApiClient
             ],
             'timeout' => 30,
         ]);
-    }
-
-    public function buildListPersonsUrl(int $page = 0, int $size = 20, string $search = '', string $searchField = 'fullName'): string
-    {
-        $query = ['page' => $page, 'size' => $size, 'direction' => 'ASC'];
-
-        if ($search !== '') {
-            $query['search'] = "{$searchField}~{$search}";
-        }
-
-        $base = rtrim($this->config->baseUrl, '/') . '/api/v2/persons';
-
-        return $base . '?' . http_build_query($query);
     }
 
     public function listPersons(int $page = 0, int $size = 20, string $search = '', string $searchField = 'fullName'): array
@@ -81,16 +68,6 @@ final readonly class EscApiClient
         }
     }
 
-    public function buildPersonUrl(string $esi): string
-    {
-        return rtrim($this->config->baseUrl, '/') . '/api/v2/persons/' . rawurlencode($esi);
-    }
-
-    /**
-     * Fetch a single person by ESI from the ESC API.
-     *
-     * @return array<string, mixed>
-     */
     public function getPerson(string $esi): array
     {
         try {
@@ -117,9 +94,6 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Check whether a person already exists in the ESC API.
-     */
     public function personExists(string $esi): bool
     {
         try {
