@@ -9,7 +9,7 @@ use InvalidArgumentException;
 use Hawb\EscrApiConnector\Enums\AcademicLevel;
 use Hawb\EscrApiConnector\Enums\CardType;
 
-final readonly class Student
+final readonly class Cardholder
 {
     public function __construct(
         public string $studentCode,

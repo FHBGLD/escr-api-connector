@@ -11,7 +11,7 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\Psr7\Response;
 use Hawb\EscrApiConnector\Classes\EscApiClient;
 use Hawb\EscrApiConnector\Classes\EscConfig;
-use Hawb\EscrApiConnector\Classes\Student;
+use Hawb\EscrApiConnector\Classes\Cardholder;
 use Hawb\EscrApiConnector\Enums\AcademicLevel;
 use PHPUnit\Framework\Attributes\Group;
 
@@ -27,8 +27,8 @@ class EscApiClientTest extends TestCase {
         ));
     }
 
-    private function createStudent(): Student {
-        return new Student(
+    private function createFakeCardholder(): Cardholder {
+        return new Cardholder(
             'abc123',
             'Didi Demo',
             'dididemo@hochschule-burgenland.at',
@@ -53,7 +53,7 @@ class EscApiClientTest extends TestCase {
             'http_errors' => false,
             'handler' => $handlerStack
         ]);
-    }    
+    }
 
     public static function validEsiProvider(): array {
         return [
@@ -70,50 +70,61 @@ class EscApiClientTest extends TestCase {
 
     #[Group('cicd')]
     #[Group('local')]
-    public function testListPersonsSucceeds(): void {
+    public function testListCardholdersSucceeds(): void {
         $apiClient = $this->createApiClient(200, ['List persons']);
-        $response = $apiClient->listPersons();
+        $response = $apiClient->listCardholders();
         $this->assertIsArray($response);
         $this->assertContains('List persons', $response);
     } 
 
     #[Group('cicd')]
     #[Group('local')]
-    public function testPersonExistencyCheckWorksWithExistingPerson(): void {
+    public function testCardholderExistencyCheckWorksWithExistingCardholder(): void {
         $esi = 'abc';
         $apiClient = $this->createApiClient(200, ['one element']);
-        $response = $apiClient->personExists($esi);
+        $response = $apiClient->cardholderExists($esi);
         $this->assertIsBool($response);
         $this->assertTrue($response);
     }
 
     #[Group('cicd')]
     #[Group('local')]
-    public function testPersonExistencyCheckWorksWithNonExistingPerson(): void {
+    public function testCardholderExistencyCheckWorksWithNonExistingCardholder(): void {
         $esi = 'abc';
         $apiClient = $this->createApiClient(404, []);
-        $response = $apiClient->personExists($esi);
+        $response = $apiClient->cardholderExists($esi);
         $this->assertIsBool($response);
         $this->assertFalse($response);
     }
 
     #[Group('cicd')]
     #[Group('local')]
-    public function testPersonRequestSucceeds(): void {
+    public function testCardholderRequestSucceeds(): void {
         $esi = 'abc';
         $apiClient = $this->createApiClient(200, [$esi]);
-        $response = $apiClient->getPerson($esi);
+        $response = $apiClient->getCardholder($esi);
         $this->assertIsArray($response);
         $this->assertContains($esi, $response);
     }
 
     #[Group('cicd')]
     #[Group('local')]
-    public function testCreatePersonSucceeds(): void {
-        $student = $this->createStudent();
+    public function testCreateCardholderSucceeds(): void {
+        $student = $this->createFakeCardholder();
         $esi = 'abc';
         $apiClient = $this->createApiClient(200, [$esi]);
-        $response = $apiClient->createPerson($student, $esi);
+        $response = $apiClient->createCardholder($student, $esi);
         $this->assertNull($response);
     }
+
+    #[Group('cicd')]
+    #[Group('local')]
+    public function testUpdateCardholderSucceeds(): void {
+        $student = $this->createFakeCardholder();
+        $esi = 'abc';
+        $apiClient = $this->createApiClient(200, [$esi]);
+        $response = $apiClient->updateCardholder($student, $esi);
+        $this->assertNull($response);
+    }    
+    
 }

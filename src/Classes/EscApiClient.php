@@ -33,7 +33,7 @@ final readonly class EscApiClient
         ]);
     }
 
-    public function listPersons(int $page = 0, int $size = 20, string $search = '', string $searchField = 'fullName'): array
+    public function listCardholders(int $page = 0, int $size = 20, string $search = '', string $searchField = 'fullName'): array
     {
         try {
             $query = ['page' => $page, 'size' => $size, 'direction' => 'ASC'];
@@ -54,7 +54,7 @@ final readonly class EscApiClient
         }
     }
 
-    public function getPerson(string $esi): array
+    public function getCardholder(string $esi): array
     {
         try {
             $response = $this->httpClient->get('api/v2/persons/' . rawurlencode($esi));
@@ -68,30 +68,18 @@ final readonly class EscApiClient
         }
     }
 
-    public function personExists(string $esi): bool
+    public function cardholderExists(string $esi): bool
     {
-        $response = $this->getPerson($esi);
+        $response = $this->getCardholder($esi);
         return $response['status_code'] === 200;
     }
 
-    public function createPerson(Student $student, string $esi): void
+    public function createCardholder(Cardholder $cardholder, string $esi): void
     {
         try {
             $this->httpClient->post('api/v2/persons', [
-                'json' => $this->buildPersonPayload($student, $esi),
+                'json' => $this->buildCardholderPayload($cardholder, $esi),
             ]);
-        } catch (ClientException $e) {
-            $status = $e->getResponse()->getStatusCode();
-
-            // 409 = already exists – treat as a no-op
-            if ($status === 409) {
-                return;
-            }
-
-            throw new EscApiException(
-                "Failed to create person {$esi} (HTTP {$status}): " . $e->getMessage(),
-                previous: $e,
-            );
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while creating person {$esi}: " . $e->getMessage(),
@@ -100,19 +88,12 @@ final readonly class EscApiClient
         }
     }
 
-    public function updatePerson(Student $student, string $esi): void
+    public function updateCardholder(Cardholder $cardholder, string $esi): void
     {
         try {
             $this->httpClient->put("api/v2/persons/{$esi}", [
-                'json' => $this->buildPersonPayload($student, $esi),
+                'json' => $this->buildCardholderPayload($cardholder, $esi),
             ]);
-        } catch (ClientException $e) {
-            $status = $e->getResponse()->getStatusCode();
-
-            throw new EscApiException(
-                "Failed to update person {$esi} (HTTP {$status}): " . $e->getMessage(),
-                previous: $e,
-            );
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while updating person {$esi}: " . $e->getMessage(),
@@ -124,7 +105,7 @@ final readonly class EscApiClient
     /**
      * Check whether a card already exists for the given ESI.
      */
-    public function cardExistsForPerson(string $esi): bool
+    public function cardExistsForCardholder(string $esi): bool
     {
         try {
             $result = $this->listCards(search: $esi, searchField: 'person.identifier', size: 1);
@@ -224,7 +205,7 @@ final readonly class EscApiClient
 
     public function getQrCodeSvgByEsi(string $esi): ?string
     {
-        if ($esi === '' || !$this->personExists($esi)) {
+        if ($esi === '' || !$this->cardholderExists($esi)) {
             return null;
         }
 
@@ -271,12 +252,7 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Create a new card for a student in the ESC API.
-     *
-     * The card number (ESCN) is left blank so the API auto-generates it.
-     */
-    public function createCard(Student $student, string $esi): void
+    public function createCard(Cardholder $cardholder, string $esi): void
     {
         $issuedAt = date('Y-m-d');
 
@@ -285,11 +261,11 @@ final readonly class EscApiClient
                 'json' => [
                     'personIdentifier' => $esi,
                     'issuerIdentifier' => $this->config->organisationPic,
-                    'cardType' => $student->cardType->value,
+                    'cardType' => $cardholder->cardType->value,
                     'cardStatusType' => 'ACTIVE',
                     'issuedAt' => $issuedAt,
-                    'expiresAt' => $student->cardExpiresAt,
-                    'displayName' => 'Card of ' . $student->fullName,
+                    'expiresAt' => $cardholder->cardExpiresAt,
+                    'displayName' => 'Card of ' . $cardholder->fullName,
                 ],
             ]);
         } catch (ClientException $e) {
@@ -312,10 +288,7 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Delete every card assigned to a person.
-     */
-    public function deleteCardsForPerson(string $esi): void
+    public function deleteCardsForCardholder(string $esi): void
     {
         $cardNumbers = [];
         $page = 0;
@@ -371,10 +344,7 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Delete a person (student) by ESI.
-     */
-    public function deletePerson(string $esi): void
+    public function deleteCardholder(string $esi): void
     {
         try {
             $this->httpClient->delete('api/v2/persons/' . rawurlencode($esi));
@@ -397,12 +367,7 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Build the PersonUpdateView payload expected by the ESC API.
-     *
-     * @return array<string, mixed>
-     */
-    private function buildPersonPayload(Student $student, string $esi): array
+    private function buildCardholderPayload(Cardholder $cardholder, string $esi): array
     {
         return [
             'identifier' => $esi,
@@ -410,9 +375,9 @@ final readonly class EscApiClient
             'personOrganisationUpdateViews' => [
                 [
                     'organisationIdentifier' => $this->config->organisationPic,
-                    'fullName' => $student->fullName,
-                    'email' => $student->email,
-                    'academicLevel' => $student->academicLevel->value,
+                    'fullName' => $cardholder->fullName,
+                    'email' => $cardholder->email,
+                    'academicLevel' => $cardholder->academicLevel->value,
                 ],
             ],
         ];
