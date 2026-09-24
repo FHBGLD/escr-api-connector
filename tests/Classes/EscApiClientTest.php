@@ -37,11 +37,9 @@ class EscApiClientTest extends TestCase {
         );
     }
 
-    private function createApiClient(int $statusCode = 200, array $responseBody = ['Hello world']): EscApiClient {
+    private function createApiClient(array $responses): EscApiClient {
         $clientMock = $this->createHttpClient(
-            new MockHandler([
-                new Response($statusCode, ['X-Foo' => 'Bar'], json_encode($responseBody))
-            ])
+            new MockHandler($responses)
         );
 
         return new EscApiClient($this->createEscConfig(), $clientMock);
@@ -71,60 +69,129 @@ class EscApiClientTest extends TestCase {
     #[Group('cicd')]
     #[Group('local')]
     public function testListCardholdersSucceeds(): void {
-        $apiClient = $this->createApiClient(200, ['List persons']);
-        $response = $apiClient->listCardholders();
-        $this->assertIsArray($response);
-        $this->assertContains('List persons', $response);
-    } 
+        $apiClient = $this->createApiClient([new Response(200, [],  json_encode(['List persons']))]);
+        $result = $apiClient->listCardholders();
+        $this->assertIsArray($result);
+        $this->assertContains('List persons', $result);
+    }
 
     #[Group('cicd')]
     #[Group('local')]
     public function testCardholderExistencyCheckWorksWithExistingCardholder(): void {
         $esi = 'abc';
-        $apiClient = $this->createApiClient(200, ['one element']);
-        $response = $apiClient->cardholderExists($esi);
-        $this->assertIsBool($response);
-        $this->assertTrue($response);
+        $apiClient = $this->createApiClient([new Response(200, [], json_encode(['one element']))]);
+        $result = $apiClient->cardholderExists($esi);
+        $this->assertIsBool($result);
+        $this->assertTrue($result);
     }
 
     #[Group('cicd')]
     #[Group('local')]
     public function testCardholderExistencyCheckWorksWithNonExistingCardholder(): void {
         $esi = 'abc';
-        $apiClient = $this->createApiClient(404, []);
-        $response = $apiClient->cardholderExists($esi);
-        $this->assertIsBool($response);
-        $this->assertFalse($response);
+        $apiClient = $this->createApiClient([new Response(404, [], json_encode([]))]);
+        $result = $apiClient->cardholderExists($esi);
+        $this->assertIsBool($result);
+        $this->assertFalse($result);
     }
 
     #[Group('cicd')]
     #[Group('local')]
     public function testCardholderRequestSucceeds(): void {
         $esi = 'abc';
-        $apiClient = $this->createApiClient(200, [$esi]);
-        $response = $apiClient->getCardholder($esi);
-        $this->assertIsArray($response);
-        $this->assertContains($esi, $response);
+        $apiClient = $this->createApiClient([new Response(200, [], json_encode([$esi]))]);
+        $result = $apiClient->getCardholder($esi);
+        $this->assertIsArray($result);
+        $this->assertContains($esi, $result);
     }
 
     #[Group('cicd')]
     #[Group('local')]
     public function testCreateCardholderSucceeds(): void {
-        $student = $this->createFakeCardholder();
+        $cardholder = $this->createFakeCardholder();
         $esi = 'abc';
-        $apiClient = $this->createApiClient(200, [$esi]);
-        $response = $apiClient->createCardholder($student, $esi);
-        $this->assertNull($response);
+        $apiClient = $this->createApiClient([new Response(200, [], json_encode([$esi]))]);
+        $result = $apiClient->createCardholder($cardholder, $esi);
+        $this->assertNull($result);
     }
 
     #[Group('cicd')]
     #[Group('local')]
     public function testUpdateCardholderSucceeds(): void {
-        $student = $this->createFakeCardholder();
+        $cardholder = $this->createFakeCardholder();
         $esi = 'abc';
-        $apiClient = $this->createApiClient(200, [$esi]);
-        $response = $apiClient->updateCardholder($student, $esi);
-        $this->assertNull($response);
-    }    
-    
+        $apiClient = $this->createApiClient([new Response(200, [], json_encode([$esi]))]);
+        $result = $apiClient->updateCardholder($cardholder, $esi);
+        $this->assertNull($result);
+    }
+
+    #[Group('cicd')]
+    #[Group('local')]
+    public function testCardExistsForCardholderReturnsTrue(): void {
+        $esi = 'abc';
+        $apiClient = $this->createApiClient([new Response(200, [], json_encode(['page' => ['totalElements' => 1]]))]);
+        $result = $apiClient->cardExistsForCardholder($esi);
+        $this->assertIsBool($result);
+        $this->assertTrue($result);
+    }
+
+    #[Group('cicd')]
+    #[Group('local')]
+    public function testCardExistForCardholderReturnsFalse(): void {
+        $esi = 'abc';
+        $apiClient = $this->createApiClient([new Response(200, [], json_encode(['page' => ['totalElements' => 0]]))]);
+        $result = $apiClient->cardExistsForCardholder($esi);
+        $this->assertIsBool($result);
+        $this->assertFalse($result);
+    }
+
+    #[Group('cicd')]
+    #[Group('local')]
+    public function testListCardsSucceeds(): void {
+        $apiClient = $this->createApiClient([new Response(200, [], json_encode(['List cards']))]);
+        $result = $apiClient->listCards();
+        $this->assertIsArray($result);
+        $this->assertContains('List cards', $result);
+    }
+
+    public function testGetCardSucceeds(): void {
+        $escn = 'abc';
+        $apiClient = $this->createApiClient([new Response(200, [], json_encode([$escn]))]);
+        $result = $apiClient->getCard($escn);
+        $this->assertIsArray($result);
+        $this->assertContains($escn, $result);
+    }
+
+    public function testGetCardFails(): void {
+        $escn = 'abc';
+        $apiClient = $this->createApiClient([new Response(404, [], json_encode([]))]);
+        $result = $apiClient->getCard($escn);
+        $this->assertIsArray($result);
+        $this->assertNotContains($escn, $result);
+    }
+
+    public function testGetQrCodeSvgByEsiSucceeds(): void {
+        $esi = 'abc';
+        $responses = [
+            new Response(200, ['Content-Type' => 'application/json'], json_encode(['one element'])),
+            new Response(200, ['Content-Type' => 'application/json'], json_encode(['content' => [0 => ['cardNumber' => 'card-number']]])),
+            new Response(200, ['Content-Type' => 'application/json'], json_encode(['svg_result']))
+        ];
+        $apiClient = $this->createApiClient($responses);
+        $result = $apiClient->getQrCodeSvgByEsi($esi);
+        $this->assertIsString($result);
+        $this->assertStringContainsString('svg_result', $result);
+    }
+
+    public function testGetQrCodeSvgByEsiWithoutResultSucceeds(): void {
+        $esi = 'abc';
+        $responses = [
+            new Response(200, ['Content-Type' => 'application/json'], json_encode(['one element'])),
+            new Response(200, ['X-Foo' => 'Bar'], json_encode(['content' => [0 => ['cardNumber' => 'card-number']]])),
+            new Response(200, [], json_encode(null))
+        ];
+        $apiClient = $this->createApiClient($responses);
+        $result = $apiClient->getQrCodeSvgByEsi($esi);
+        $this->assertEquals('null', $result);
+    }
 }

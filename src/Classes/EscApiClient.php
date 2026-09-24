@@ -44,7 +44,6 @@ final readonly class EscApiClient
 
             $response = $this->httpClient->get('api/v2/persons', ['query' => $query]);
 
-            /** @var array{content: list<array<string, mixed>>, page: array{number: int, size: int, totalElements: int, totalPages: int}} $decoded */
             return json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
         } catch (GuzzleException $e) {
             throw new EscApiException(
@@ -102,9 +101,6 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Check whether a card already exists for the given ESI.
-     */
     public function cardExistsForCardholder(string $esi): bool
     {
         try {
@@ -119,43 +115,6 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Build the full URL that listCards would request, including all query parameters.
-     */
-    public function buildListCardsUrl(int $page = 0, int $size = 20, string $search = '', string $searchField = 'displayName'): string
-    {
-        $query = ['page' => $page, 'size' => $size, 'direction' => 'ASC'];
-
-        if ($search !== '') {
-            $query['search'] = "{$searchField}~{$search}";
-        }
-
-        $base = rtrim($this->config->baseUrl, '/') . '/api/v2/cards';
-
-        return $base . '?' . http_build_query($query);
-    }
-
-    /**
-     * Build the full URL that getCard would request.
-     */
-    public function buildCardUrl(string $escn): string
-    {
-        return rtrim($this->config->baseUrl, '/') . '/api/v2/cards/' . rawurlencode($escn);
-    }
-
-    /**
-     * Build the full URL that getCardQrCode would request.
-     */
-    public function buildCardQrCodeUrl(string $escn): string
-    {
-        return rtrim($this->config->baseUrl, '/') . '/api/v2/cards/' . rawurlencode($escn) . '/qr';
-    }
-
-    /**
-     * Fetch a paginated list of cards from the ESC API.
-     *
-     * @return array{content: list<array<string, mixed>>, page: array{number: int, size: int, totalElements: int, totalPages: int}}
-     */
     public function listCards(int $page = 0, int $size = 20, string $search = '', string $searchField = 'displayName'): array
     {
         try {
@@ -167,7 +126,6 @@ final readonly class EscApiClient
 
             $response = $this->httpClient->get('api/v2/cards', ['query' => $query]);
 
-            /** @var array{content: list<array<string, mixed>>, page: array{number: int, size: int, totalElements: int, totalPages: int}} $decoded */
             return json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
         } catch (GuzzleException $e) {
             throw new EscApiException(
@@ -182,19 +140,7 @@ final readonly class EscApiClient
         try {
             $response = $this->httpClient->get("api/v2/cards/{$escn}");
 
-            /** @var array<string, mixed> $decoded */
             return json_decode((string) $response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
-        } catch (ClientException $e) {
-            $status = $e->getResponse()->getStatusCode();
-
-            if ($status === 404) {
-                throw new EscApiException("Card not found: {$escn}", previous: $e);
-            }
-
-            throw new EscApiException(
-                "Failed to fetch card {$escn} (HTTP {$status}): " . $e->getMessage(),
-                previous: $e,
-            );
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while fetching card {$escn}: " . $e->getMessage(),
@@ -211,7 +157,6 @@ final readonly class EscApiClient
 
         $cards = $this->listCards(search: $esi, searchField: 'person.identifier', size: 1);
         $cardNumber = $cards['content'][0]['cardNumber'] ?? null;
-
         if (!is_string($cardNumber) || $cardNumber === '') {
             return null;
         }
@@ -219,9 +164,6 @@ final readonly class EscApiClient
         return $this->getCardQrCode($cardNumber);
     }
 
-    /**
-     * Fetch an SVG QR code for a card from the ESC API.
-     */
     public function getCardQrCode(string $escn): string
     {
         try {
@@ -236,14 +178,7 @@ final readonly class EscApiClient
                 ],
             ]);
 
-            return $this->resizeQrCodeSvg(trim((string) $response->getBody()));
-        } catch (ClientException $e) {
-            $status = $e->getResponse()->getStatusCode();
-
-            throw new EscApiException(
-                "Failed to fetch QR code for card {$escn} (HTTP {$status}): " . $e->getMessage(),
-                previous: $e,
-            );
+            return $response->getBody()->getContents();
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while fetching QR code for card {$escn}: " . $e->getMessage(),
@@ -268,18 +203,6 @@ final readonly class EscApiClient
                     'displayName' => 'Card of ' . $cardholder->fullName,
                 ],
             ]);
-        } catch (ClientException $e) {
-            $status = $e->getResponse()->getStatusCode();
-
-            // 409 = card already exists – treat as a no-op
-            if ($status === 409) {
-                return;
-            }
-
-            throw new EscApiException(
-                "Failed to create card for {$esi} (HTTP {$status}): " . $e->getMessage(),
-                previous: $e,
-            );
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while creating card for {$esi}: " . $e->getMessage(),
@@ -318,24 +241,10 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Delete a card by its ESCN (card number).
-     */
     public function deleteCard(string $escn): void
     {
         try {
             $this->httpClient->delete('api/v2/cards/' . rawurlencode($escn));
-        } catch (ClientException $e) {
-            $status = $e->getResponse()->getStatusCode();
-
-            if ($status === 404) {
-                return;
-            }
-
-            throw new EscApiException(
-                "Failed to delete card {$escn} (HTTP {$status}): " . $e->getMessage(),
-                previous: $e,
-            );
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while deleting card {$escn}: " . $e->getMessage(),
@@ -348,17 +257,6 @@ final readonly class EscApiClient
     {
         try {
             $this->httpClient->delete('api/v2/persons/' . rawurlencode($esi));
-        } catch (ClientException $e) {
-            $status = $e->getResponse()->getStatusCode();
-
-            if ($status === 404) {
-                return;
-            }
-
-            throw new EscApiException(
-                "Failed to delete person {$esi} (HTTP {$status}): " . $e->getMessage(),
-                previous: $e,
-            );
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while deleting person {$esi}: " . $e->getMessage(),
