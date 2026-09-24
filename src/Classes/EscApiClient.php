@@ -74,9 +74,6 @@ final readonly class EscApiClient
         return $response['status_code'] === 200;
     }
 
-    /**
-     * Create a new person (student) in the ESC API.
-     */
     public function createPerson(Student $student, string $esi): void
     {
         try {
@@ -103,9 +100,6 @@ final readonly class EscApiClient
         }
     }
 
-    /**
-     * Update an existing person (student) in the ESC API.
-     */
     public function updatePerson(Student $student, string $esi): void
     {
         try {

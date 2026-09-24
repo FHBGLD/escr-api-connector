@@ -11,15 +11,11 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\Psr7\Response;
 use Hawb\EscrApiConnector\Classes\EscApiClient;
 use Hawb\EscrApiConnector\Classes\EscConfig;
+use Hawb\EscrApiConnector\Classes\Student;
+use Hawb\EscrApiConnector\Enums\AcademicLevel;
 use PHPUnit\Framework\Attributes\Group;
-use PHPUnit\Framework\Attributes\DataProvider;
 
 class EscApiClientTest extends TestCase {
-
-    private function createHttpClient(MockHandler $mock): Client {
-        $handlerStack = HandlerStack::create($mock);
-        return new Client(['handler' => $handlerStack]);
-    }
 
     private function createEscConfig(): EscConfig {
         return (new EscConfig(
@@ -31,15 +27,33 @@ class EscApiClientTest extends TestCase {
         ));
     }
 
-    private function createApiClient(array $responseBody = ['Hello world']): EscApiClient {
+    private function createStudent(): Student {
+        return new Student(
+            'abc123',
+            'Didi Demo',
+            'dididemo@hochschule-burgenland.at',
+            AcademicLevel::BACHELOR,
+            '2027-09-01'
+        );
+    }
+
+    private function createApiClient(int $statusCode = 200, array $responseBody = ['Hello world']): EscApiClient {
         $clientMock = $this->createHttpClient(
             new MockHandler([
-                new Response(200, ['X-Foo' => 'Bar'], json_encode($responseBody))
+                new Response($statusCode, ['X-Foo' => 'Bar'], json_encode($responseBody))
             ])
         );
 
         return new EscApiClient($this->createEscConfig(), $clientMock);
     }
+
+    private function createHttpClient(MockHandler $mock): Client {
+        $handlerStack = HandlerStack::create($mock);
+        return new Client([
+            'http_errors' => false,
+            'handler' => $handlerStack
+        ]);
+    }    
 
     public static function validEsiProvider(): array {
         return [
@@ -57,7 +71,7 @@ class EscApiClientTest extends TestCase {
     #[Group('cicd')]
     #[Group('local')]
     public function testListPersonsSucceeds(): void {
-        $apiClient = $this->createApiClient(['List persons']);
+        $apiClient = $this->createApiClient(200, ['List persons']);
         $response = $apiClient->listPersons();
         $this->assertIsArray($response);
         $this->assertContains('List persons', $response);
@@ -67,7 +81,7 @@ class EscApiClientTest extends TestCase {
     #[Group('local')]
     public function testPersonExistencyCheckWorksWithExistingPerson(): void {
         $esi = 'abc';
-        $apiClient = $this->createApiClient(['one element']);
+        $apiClient = $this->createApiClient(200, ['one element']);
         $response = $apiClient->personExists($esi);
         $this->assertIsBool($response);
         $this->assertTrue($response);
@@ -77,7 +91,7 @@ class EscApiClientTest extends TestCase {
     #[Group('local')]
     public function testPersonExistencyCheckWorksWithNonExistingPerson(): void {
         $esi = 'abc';
-        $apiClient = $this->createApiClient([]);
+        $apiClient = $this->createApiClient(404, []);
         $response = $apiClient->personExists($esi);
         $this->assertIsBool($response);
         $this->assertFalse($response);
@@ -87,9 +101,19 @@ class EscApiClientTest extends TestCase {
     #[Group('local')]
     public function testPersonRequestSucceeds(): void {
         $esi = 'abc';
-        $apiClient = $this->createApiClient([$esi]);
+        $apiClient = $this->createApiClient(200, [$esi]);
         $response = $apiClient->getPerson($esi);
         $this->assertIsArray($response);
         $this->assertContains($esi, $response);
+    }
+
+    #[Group('cicd')]
+    #[Group('local')]
+    public function testCreatePersonSucceeds(): void {
+        $student = $this->createStudent();
+        $esi = 'abc';
+        $apiClient = $this->createApiClient(200, [$esi]);
+        $response = $apiClient->createPerson($student, $esi);
+        $this->assertNull($response);
     }
 }
