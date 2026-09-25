@@ -177,7 +177,6 @@ final readonly class EscApiClient
                     'size' => 'M',
                 ],
             ]);
-
             return $response->getBody()->getContents();
         } catch (GuzzleException $e) {
             throw new EscApiException(
@@ -187,7 +186,7 @@ final readonly class EscApiClient
         }
     }
 
-    public function createCard(Cardholder $cardholder, string $esi): void
+    public function createCard(Cardholder $cardholder, string $esi): bool
     {
         $issuedAt = date('Y-m-d');
 
@@ -203,6 +202,8 @@ final readonly class EscApiClient
                     'displayName' => 'Card of ' . $cardholder->fullName,
                 ],
             ]);
+
+            return true;
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while creating card for {$esi}: " . $e->getMessage(),
@@ -211,7 +212,7 @@ final readonly class EscApiClient
         }
     }
 
-    public function deleteCardsForCardholder(string $esi): void
+    public function deleteCardsForCardholder(string $esi): bool
     {
         $cardNumbers = [];
         $page = 0;
@@ -226,7 +227,6 @@ final readonly class EscApiClient
 
             foreach ($result['content'] ?? [] as $card) {
                 $cardNumber = $card['cardNumber'] ?? null;
-
                 if (is_string($cardNumber) && $cardNumber !== '') {
                     $cardNumbers[] = $cardNumber;
                 }
@@ -239,12 +239,15 @@ final readonly class EscApiClient
         foreach (array_unique($cardNumbers) as $cardNumber) {
             $this->deleteCard($cardNumber);
         }
+
+        return true;
     }
 
-    public function deleteCard(string $escn): void
+    public function deleteCard(string $escn): bool
     {
         try {
             $this->httpClient->delete('api/v2/cards/' . rawurlencode($escn));
+            return true;
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while deleting card {$escn}: " . $e->getMessage(),
@@ -253,10 +256,11 @@ final readonly class EscApiClient
         }
     }
 
-    public function deleteCardholder(string $esi): void
+    public function deleteCardholder(string $esi): bool
     {
         try {
             $this->httpClient->delete('api/v2/persons/' . rawurlencode($esi));
+            return true;
         } catch (GuzzleException $e) {
             throw new EscApiException(
                 "HTTP error while deleting person {$esi}: " . $e->getMessage(),
