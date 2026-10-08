@@ -1,3 +1,5 @@
 /vendor/
 coverage/cobertura.xml
 .phpunit.cache/
+index.php
+coverage-html/

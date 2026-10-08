@@ -11,7 +11,8 @@
          failOnPhpunitDeprecation="false"
          failOnRisky="false"
          failOnWarning="false"
-         warnWhenPhpIsNotConfiguredForDevelopment="true">
+         warnWhenPhpIsNotConfiguredForDevelopment="true"
+         displayDetailsOnTestsThatTriggerDeprecations="true">
     <testsuites>
         <testsuite name="default">
             <directory>tests/</directory>
