@@ -59,9 +59,9 @@ final class Cardholder
         );
     }
 
-    public static function esi(string $uid): string
+    public static function esi(string $uid, EscConfig $config): string
     {
-        $countryCode = strtoupper(trim((string) ($_ENV['ESC_COUNTRY_CODE'] ?? '')));
+        $countryCode = strtoupper(trim((string) ($config->countryCode ?? '')));
         $uid = trim($uid);
 
         if ($countryCode === '' || $uid === '') {
