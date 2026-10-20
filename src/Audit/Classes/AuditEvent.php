@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hawb\EscrApiConnector\Audit\Classes;
 
+use Hawb\EscrApiConnector\Audit\Enums\AuditEventType;
 use InvalidArgumentException;
 
 final readonly class AuditEvent

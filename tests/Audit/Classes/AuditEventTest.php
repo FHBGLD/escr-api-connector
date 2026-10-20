@@ -6,7 +6,7 @@ namespace Hawb\EscrApiConnector\Tests\Audit\Classes;
 
 use PHPUnit\Framework\TestCase;
 use Hawb\EscrApiConnector\Audit\Classes\AuditEvent;
-use Hawb\EscrApiConnector\Audit\Classes\AuditEventType;
+use Hawb\EscrApiConnector\Audit\Enums\AuditEventType;
 use Hawb\EscrApiConnector\Audit\Classes\AuditOutcome;
 use Hawb\EscrApiConnector\Audit\Classes\AuditFailureCode;
 use InvalidArgumentException;
