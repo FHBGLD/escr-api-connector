@@ -3,6 +3,7 @@
     "description": "Package that talks to the API of the European Student Card Router to Insert, Update and Delete Card Holders and corresponding European Student Cards. Also retrieve the QR Code for validating a digital ESC.",
     "type": "library",
     "require": {
+        "php": ">=8.4",
         "guzzlehttp/guzzle": "~8.2.0"
     },
     "require-dev": {
