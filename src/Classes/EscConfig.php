@@ -10,6 +10,6 @@ final class EscConfig {
         public readonly string $baseUrl,
         public readonly string $organisationPic,
         public readonly string $countryCode,
-        public readonly float $qrCodeRenderSize
+        public readonly float $qrCodeRenderSize = 240.0
     ) {}
 }
